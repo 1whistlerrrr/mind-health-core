@@ -1,0 +1,10 @@
+
+transformers>=4.35
+datasets>=2.14
+peft>=0.6
+accelerate>=0.24
+torch>=2.1
+sentencepiece
+protobuf
+tqdm
+bitsandbytes

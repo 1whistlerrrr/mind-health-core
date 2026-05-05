@@ -15,7 +15,14 @@ import json
 from tqdm import tqdm
 import time
 
-from config import Config
+# 尝试导入 Config，如果失败也没关系（用于类型注解）
+try:
+    from .config import Config
+except ImportError:
+    try:
+        from src.config import Config
+    except ImportError:
+        Config = None
 
 
 # ===========================================
@@ -48,7 +55,7 @@ class Tokenizer:
                 tokens.append(char)
         
         # 如果词表还没满，添加常用二元组
-        if len(tokens) &lt; self.vocab_size:
+        if len(tokens) < self.vocab_size:
             bigrams = []
             for i in range(len(chars) - 1):
                 bigrams.append(chars[i] + chars[i+1])
@@ -62,7 +69,7 @@ class Tokenizer:
         self.inv_vocab = {idx: token for idx, token in enumerate(tokens)}
         print(f"✅ Tokenizer训练完成，词表大小: {len(self.vocab)}")
     
-    def encode(self, text: str, add_special_tokens: bool = True) -&gt; List[int]:
+    def encode(self, text: str, add_special_tokens: bool = True) -> List[int]:
         """编码文本到token ids"""
         # 按长度降序排序token
         sorted_tokens = sorted(self.vocab.keys(), key=lambda x: (-len(x), x))
@@ -71,7 +78,7 @@ class Tokenizer:
         
         ids = []
         i = 0
-        while i &lt; len(text):
+        while i < len(text):
             matched = False
             for token in sorted_tokens:
                 if text.startswith(token, i):
@@ -88,7 +95,7 @@ class Tokenizer:
         
         return ids
     
-    def decode(self, ids: List[int]) -&gt; str:
+    def decode(self, ids: List[int]) -> str:
         """解码token ids到文本"""
         tokens = []
         for idx in ids:
@@ -108,7 +115,7 @@ class Tokenizer:
         print(f"✅ Tokenizer已保存到: {path}")
     
     @classmethod
-    def load(cls, path: str) -&gt; 'Tokenizer':
+    def load(cls, path: str) -> 'Tokenizer':
         """加载tokenizer"""
         data = torch.load(path)
         tokenizer = cls(data["vocab_size"])
@@ -127,15 +134,15 @@ class RMSNorm(nn.Module):
         self.weight = nn.Parameter(torch.ones(dim))
         self.eps = eps
     
-    def _norm(self, x: torch.Tensor) -&gt; torch.Tensor:
+    def _norm(self, x: torch.Tensor) -> torch.Tensor:
         return x * torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + self.eps)
     
-    def forward(self, x: torch.Tensor) -&gt; torch.Tensor:
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         output = self._norm(x.float()).type_as(x)
         return output * self.weight
 
 
-def precompute_freqs_cis(dim: int, end: int, theta: float = 10000.0) -&gt; torch.Tensor:
+def precompute_freqs_cis(dim: int, end: int, theta: float = 10000.0) -> torch.Tensor:
     freqs = 1.0 / (theta ** (torch.arange(0, dim, 2)[: (dim // 2)].float() / dim))
     t = torch.arange(end, device=freqs.device)
     freqs = torch.outer(t, freqs).float()
@@ -144,7 +151,7 @@ def precompute_freqs_cis(dim: int, end: int, theta: float = 10000.0) -&gt; torch
 
 def apply_rotary_emb(
     xq: torch.Tensor, xk: torch.Tensor, freqs_cis: torch.Tensor
-) -&gt; Tuple[torch.Tensor, torch.Tensor]:
+) -> Tuple[torch.Tensor, torch.Tensor]:
     xq_ = torch.view_as_complex(xq.float().reshape(*xq.shape[:-1], -1, 2))
     xk_ = torch.view_as_complex(xk.float().reshape(*xk.shape[:-1], -1, 2))
     freqs_cis = freqs_cis.unsqueeze(0).unsqueeze(2)
@@ -165,7 +172,7 @@ class Attention(nn.Module):
         self.wv = nn.Linear(dim, dim, bias=False)
         self.wo = nn.Linear(dim, dim, bias=False)
     
-    def forward(self, x: torch.Tensor, freqs_cis: torch.Tensor, mask: Optional[torch.Tensor] = None) -&gt; torch.Tensor:
+    def forward(self, x: torch.Tensor, freqs_cis: torch.Tensor, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
         batch_size, seq_len, _ = x.shape
         
         xq, xk, xv = self.wq(x), self.wk(x), self.wv(x)
@@ -199,7 +206,7 @@ class FeedForward(nn.Module):
         self.w2 = nn.Linear(hidden_dim, dim, bias=False)
         self.w3 = nn.Linear(dim, hidden_dim, bias=False)
     
-    def forward(self, x: torch.Tensor) -&gt; torch.Tensor:
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.w2(F.silu(self.w1(x)) * self.w3(x))
 
 
@@ -211,7 +218,7 @@ class TransformerBlock(nn.Module):
         self.attention_norm = RMSNorm(dim)
         self.ffn_norm = RMSNorm(dim)
     
-    def forward(self, x: torch.Tensor, freqs_cis: torch.Tensor, mask: Optional[torch.Tensor] = None) -&gt; torch.Tensor:
+    def forward(self, x: torch.Tensor, freqs_cis: torch.Tensor, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
         h = x + self.attention(self.attention_norm(x), freqs_cis, mask)
         return h + self.feed_forward(self.ffn_norm(h))
 
@@ -245,7 +252,7 @@ class MiniMind(nn.Module):
         # 预计算RoPE频率
         self.freqs_cis = precompute_freqs_cis(dim // n_heads, max_seq_len * 2)
     
-    def forward(self, tokens: torch.Tensor, start_pos: int = 0) -&gt; torch.Tensor:
+    def forward(self, tokens: torch.Tensor, start_pos: int = 0) -> torch.Tensor:
         batch_size, seq_len = tokens.shape
         
         h = self.tok_embeddings(tokens)
@@ -253,7 +260,7 @@ class MiniMind(nn.Module):
         freqs_cis = self.freqs_cis[start_pos : start_pos + seq_len]
         
         mask = None
-        if seq_len &gt; 1:
+        if seq_len > 1:
             mask = torch.full((seq_len, seq_len), float("-inf"), device=h.device)
             mask = torch.triu(mask, diagonal=1)
             mask = mask[None, None, :, :]
@@ -265,7 +272,7 @@ class MiniMind(nn.Module):
     
     @torch.no_grad()
     def generate(self, prompt_tokens: List[int], max_new_tokens: int = 100, 
-                 temperature: float = 0.8, top_k: int = 40) -&gt; List[int]:
+                 temperature: float = 0.8, top_k: int = 40) -> List[int]:
         """自回归生成文本"""
         self.eval()
         device = next(self.parameters()).device
@@ -274,18 +281,18 @@ class MiniMind(nn.Module):
         generated = prompt_tokens.copy()
         
         for _ in range(max_new_tokens):
-            if tokens.shape[1] &gt; self.max_seq_len:
+            if tokens.shape[1] > self.max_seq_len:
                 tokens = tokens[:, -self.max_seq_len:]
             
             logits = self(tokens)
             next_token_logits = logits[0, -1, :]
             
-            if temperature &gt; 0:
+            if temperature > 0:
                 next_token_logits = next_token_logits / temperature
             
-            if top_k &gt; 0:
+            if top_k > 0:
                 v, _ = torch.topk(next_token_logits, top_k)
-                next_token_logits[next_token_logits &lt; v[-1]] = -float('inf')
+                next_token_logits[next_token_logits < v[-1]] = -float('inf')
             
             probs = F.softmax(next_token_logits, dim=-1)
             next_token = torch.multinomial(probs, num_samples=1).item()
@@ -302,7 +309,7 @@ class MiniMind(nn.Module):
         print(f"✅ 模型权重已保存到: {path} ({size_mb:.2f} MB)")
     
     @classmethod
-    def load(cls, path: str, config: Config) -&gt; 'MiniMind':
+    def load(cls, path: str, config: Config) -> 'MiniMind':
         """从权重加载模型"""
         model = cls(
             vocab_size=config.model.vocab_size,
@@ -336,7 +343,7 @@ class MiniMind(nn.Module):
         print(f"✅ 完整模型已保存到目录: {dir_path}")
     
     @classmethod
-    def from_pretrained(cls, dir_path: str) -&gt; 'MiniMind':
+    def from_pretrained(cls, dir_path: str) -> 'MiniMind':
         """从目录加载完整模型"""
         # 加载配置
         with open(os.path.join(dir_path, "config.json"), "r", encoding="utf-8") as f:
@@ -362,10 +369,10 @@ class TextDataset(Dataset):
         self.tokens = tokenizer.encode(text, add_special_tokens=False)
         print(f"📚 数据集准备完成，总token数: {len(self.tokens)}")
     
-    def __len__(self) -&gt; int:
+    def __len__(self) -> int:
         return max(0, len(self.tokens) - self.seq_len - 1)
     
-    def __getitem__(self, idx: int) -&gt; Tuple[torch.Tensor, torch.Tensor]:
+    def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor]:
         inputs = self.tokens[idx: idx + self.seq_len]
         targets = self.tokens[idx + 1: idx + self.seq_len + 1]
         return torch.tensor(inputs, dtype=torch.long), torch.tensor(targets, dtype=torch.long)
@@ -401,7 +408,7 @@ class SFTDataset(Dataset):
                 [tokenizer.vocab[tokenizer.eos_token]]
             )
             
-            if len(full_tokens) &gt; max_seq_len:
+            if len(full_tokens) > max_seq_len:
                 continue
             
             self.examples.append({
@@ -541,7 +548,7 @@ def train(model: MiniMind, dataloader: DataLoader, config: Config, tokenizer: To
             tokenizer.save(os.path.join(output_dir, "tokenizer.pt"))
             
             # 保存最佳模型
-            if avg_loss &lt; best_loss:
+            if avg_loss < best_loss:
                 best_loss = avg_loss
                 best_path = os.path.join(output_dir, "best_model.pt")
                 model.save(best_path)
@@ -619,7 +626,8 @@ class InferencePipeline:
         self.model = self.model.to(torch.device(device))
         self.model.eval()
     
-    def generate(self, prompt: str, max_new_tokens: int = 100, temperature: float = 0.8) -&gt; str:
+    def generate(self, prompt: str, max_new_tokens: int = 100, temperature: float = 0.8) -> str:
         prompt_tokens = self.tokenizer.encode(prompt, add_special_tokens=False)
         generated = self.model.generate(prompt_tokens, max_new_tokens, temperature)
         return self.tokenizer.decode(generated)
+

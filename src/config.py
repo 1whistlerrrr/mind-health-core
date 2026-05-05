@@ -51,7 +51,7 @@ class Config:
             self.train = TrainConfig()
 
 
-def get_config(mode: str = "demo") -&gt; Config:
+def get_config(mode: str = "demo") -> Config:
     """
     获取不同场景下的配置
     
@@ -104,13 +104,11 @@ def get_config(mode: str = "demo") -&gt; Config:
             model=ModelConfig(
                 vocab_size=8000,
                 dim=512,
-                n_layers=8,
-                n_heads=16,
+                n_layers=8, n_heads=16,
                 max_seq_len=256
             ),
             train=TrainConfig(
-                batch_size=32,
-                epochs=50,
+                batch_size=32, epochs=50,
                 save_every=5
             )
         )
@@ -126,8 +124,7 @@ def get_config(mode: str = "demo") -&gt; Config:
                 max_seq_len=16
             ),
             train=TrainConfig(
-                batch_size=4,
-                epochs=10,
+                batch_size=4, epochs=10,
                 save_every=5
             )
         )
@@ -174,3 +171,4 @@ def print_config(config: Config):
     print(f"  - 学习率: {config.train.lr}")
     print(f"  - 保存频率: 每 {config.train.save_every} epochs")
     print("=" * 60 + "\n")
+

@@ -7,10 +7,10 @@ import sys
 import os
 
 # 确保能找到当前目录的模块
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from config import get_config, print_config
-from model import Tokenizer, MiniMind, TextDataset, train
+from src.config import get_config, print_config
+from src.model import Tokenizer, MiniMind, TextDataset, train
 import torch
 
 
@@ -43,7 +43,8 @@ def main():
         
         # 2. 加载数据
         print("\n📖 加载数据...")
-        with open("chinese.txt", "r", encoding="utf-8") as f:
+        data_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'chinese.txt')
+        with open(data_path, "r", encoding="utf-8") as f:
             text = f.read()
         
         # 3. 训练Tokenizer
@@ -75,13 +76,14 @@ def main():
         # 6. 开始训练
         confirm = input("\n✅ 准备完毕，开始训练? (y/n): ").strip().lower()
         if confirm == 'y':
-            train(model, dataloader, config, tokenizer, output_dir=f"./output_{mode}")
+            output_dir = os.path.join(os.path.dirname(__file__), f"./output_{mode}")
+            train(model, dataloader, config, tokenizer, output_dir=output_dir)
     
     elif choice == "5":
         # 推理模式
         print("\n🔍 推理模式...")
         
-        from model import InferencePipeline
+        from src.model import InferencePipeline
         
         # 查找模型目录
         model_dirs = [d for d in os.listdir(".") if d.startswith("output_") and os.path.isdir(d)]
@@ -137,3 +139,4 @@ if __name__ == "__main__":
         subprocess.check_call([sys.executable, "-m", "pip", "install", "tqdm"])
     
     main()
+
